@@ -1,0 +1,29 @@
+# Line endings, pinned — because this repository is developed on Linux and built on Windows,
+# and git's default (autocrlf on the user's machine) would decide differently on each.
+
+# Source and docs: LF in the repository and in the working tree, everywhere.
+* text=auto eol=lf
+
+# Windows batch files are the exception: cmd.exe is the one consumer that genuinely wants CRLF.
+# A LF-only .bat mostly works and then fails on a `goto` label at the end of the file, which is
+# the least debuggable failure this project could ship.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Inno Setup reads the .iss with the Windows toolchain; keep it in that family too.
+*.iss text eol=crlf
+
+# Label files are data with a byte-exact format the tests assert on — never rewrite them.
+data/labels/*.txt   text eol=lf
+demo/gt_labels/*.txt text eol=lf
+
+# Binaries: never touched, never diffed as text.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.pt   binary
+*.zip  binary
+
+# Keep generated UI assets out of diff noise reviews (still versioned, just collapsed).
+pglabel/static/js/app.js   linguist-vendored=false

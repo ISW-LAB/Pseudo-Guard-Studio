@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Pseudo-Guard Studio · Collaborative Auto-Labeling</title>
+<link rel="stylesheet" href="/static/css/app.css">
+
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="logo">🎯</div>
+      <div><b>Pseudo-Guard Studio</b><span>Collaborative Auto-Labeling</span></div>
+    </div>
+    <div class="nav">
+      <button class="btn ghost sm" onclick="prev()" title="Previous (P)">◀</button>
+      <div id="counter">– / –</div>
+      <button class="btn ghost sm" onclick="next()" title="Next (N)">▶</button>
+    </div>
+    <div class="pill" title="labeling progress">
+      <div class="bar"><i id="progbar"></i></div>
+      <div class="txt" id="prog">–</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn train" onclick="confirmHuman()" title="Mark this image as reviewed by you → promote it to Human (green) and save (Enter)">✓ Check <span class="kbd">Enter</span></button>
+    <button class="btn danger" onclick="delSel()" title="Delete the selected box">🗑 Delete <span class="kbd">Del</span></button>
+    <button class="btn ghost" onclick="clearAll()" title="Remove every box on this image">Clear</button>
+    <button class="btn primary" onclick="save()">💾 Save <span class="kbd">S</span></button>
+    <div class="menu" id="exmenu">
+      <button class="btn ghost" onclick="toggleMenu(event)">⬇ Export ▾</button>
+      <div class="list">
+        <button onclick="exportCoco()">🧩 Export COCO (instances.json)</button>
+        <button onclick="exportYolo()">📄 YOLO labels (folder)</button>
+      </div>
+    </div>
+    <button class="btn ghost" onclick="openSetup()" title="Change dataset / classes">📁 Dataset</button>
+    <button class="btn ghost" id="themeBtn" onclick="toggleTheme()" title="Light / dark theme">🌗</button>
+    <button class="btn ghost" onclick="toggleHelp()" title="Keyboard shortcuts">?</button>
+  </header>
+
+  <div id="body">
+    <!-- LEFT -->
+    <aside>
+      <div class="sec">
+        <div class="hd"><span>Classes</span><span class="n" style="text-transform:none">digit keys</span></div>
+        <div class="chips" id="palette"></div>
+      </div>
+      <div class="sec">
+        <div class="hd"><span>Images</span><span id="imcount" class="n"></span></div>
+        <div class="imgs" id="imglist"></div>
+      </div>
+    </aside>
+
+    <div class="resizer" title="Drag to resize this panel" onmousedown="startResize(event,'L')"></div>
+
+    <!-- CENTER -->
+    <div id="stage">
+      <div id="stagewrap">
+        <canvas id="cv" width="900" height="600"></canvas>
+      </div>
+    </div>
+
+    <div class="resizer" title="Drag to resize this panel" onmousedown="startResize(event,'R')"></div>
+
+    <!-- RIGHT -->
+    <aside class="right">
+      <div class="sec" id="trainsec">
+        <div class="hd"><span>Train on few-label · GPU</span></div>
+        <div class="card">
+          <div class="lbl">Methodology</div>
+          <select id="method" style="width:100%" onchange="onMethodChange()"
+            title="Acceptance policy used by Inference and by every cycle round. Pseudo-Guard is always count-guided."></select>
+          <div id="manualPanel" style="display:none;margin-top:10px">
+            <div class="lbl">Score</div>
+            <div class="row" style="gap:6px">
+              <button class="btn ghost sm" id="scPgood" onclick="setScore('p_good')"
+                title="Validator P(good) — the crop-validator's softmax confidence that the box is a good object.">P(good)</button>
+              <button class="btn ghost sm" id="scConf" onclick="setScore('det_conf')"
+                title="The detector's own objectness/class confidence for the box.">Detector conf</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:11px">
+              <input id="thrSlider" type="range" min="0" max="1" step="0.01" value="0.35" style="flex:1" oninput="onThr()"/>
+              <span id="thrVal" style="min-width:34px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600">0.35</span>
+            </div>
+            <canvas id="scoreHist" width="290" height="46" style="width:100%;height:46px;margin-top:8px;border-radius:6px"></canvas>
+            <div class="stat" id="thrCount">drag the slider to set the acceptance threshold</div>
+          </div>
+          <div id="trainctl">
+            <div class="lbl" style="margin-top:12px">Detection mode</div>
+            <select id="detMode" style="width:100%;margin-bottom:10px" title="How the detector treats object classes">
+              <option value="multi">🎯 Detection multi — detect + classify</option>
+              <option value="only">📦 Detection only — classes ignored</option>
+              <option value="classify">🧬 Detection + Classify — separate classifier</option>
+            </select>
+            <div class="lbl">Training labels</div>
+            <select id="trainScope" style="width:100%;margin-bottom:10px" title="Which labels to learn from">
+              <option value="human">🟢 Your labels only</option>
+              <option value="all">🟢+🟡 Include AI-labeled too</option>
+            </select>
+            <div class="k" style="font-size:11.5px;margin:0 0 10px;color:var(--mut)"
+              title="Always on: training pauses so you inspect and tune the rule that fabricates the filter's good / noise crops, then Confirm.">
+              🔍 Rule review — always on</div>
+            <button id="trainBtn" class="btn train" style="width:100%" onclick="trainModel()">🎓 Train the model</button>
+            <div class="stat" id="trainstat">Label a few images, then train.</div>
+            <div id="tiles" class="tiles" style="display:none"></div>
+            <div id="minirows" class="minirows"></div>
+            <div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">
+              <div class="lbl">🔁 Self-training cycle</div>
+              <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                <label class="k" style="display:flex;align-items:center;gap:5px">rounds
+                  <input id="cycIters" type="number" min="1" max="10" value="3"
+                    style="width:52px;background:var(--elev);color:var(--fg);border:1px solid var(--line2);border-radius:6px;padding:5px"></label>
+                <label class="k" style="display:flex;align-items:center;gap:5px"
+                       title="Rounds 2+ train on the accepted AI labels as well as yours.">
+                  <input id="cycIncl" type="checkbox" checked> fold AI labels into training</label>
+              </div>
+              <button id="cycleBtn" class="btn train" style="width:100%;margin-top:9px" onclick="runCycle()">🔁 Run cycle</button>
+              <div id="cycRows" class="minirows"></div>
+            </div>
+            <pre id="trainlog"></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="hd"><span>Inference</span></div>
+        <div class="card">
+          <div class="row">
+            <button id="autoBtn" class="btn primary" onclick="automate()"
+              title="Run inference on the image on screen. Boxes appear for review — nothing is written until you press Save.">⚡ This image <span class="kbd">A</span></button>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button id="autoAllBtn" class="btn primary" onclick="automateAll()"
+              title="Run inference on every AI / unlabeled image and save. Your own labels are kept.">⚡⚡ All remaining</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="hd"><span>Boxes</span><span id="boxcount" class="n"></span></div>
+        <div id="boxlist"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div id="toasts"></div>
+<div id="overlay" onclick="if(event.target.id==='overlay')toggleHelp()">
+  <div class="modal">
+    <h3>⌨️ Keyboard shortcuts</h3>
+    <div class="kg">
+      <kbd>A</kbd><span>Inference on this image</span>
+      <kbd>S</kbd><span>Save labels</span>
+      <kbd>N</kbd> / <kbd>→</kbd><span>Next image</span>
+      <kbd>P</kbd> / <kbd>←</kbd><span>Previous image</span>
+      <kbd>1…9</kbd><span>Set class of selected box (or next draw)</span>
+      <kbd>Enter</kbd><span>Check — mark this image as reviewed by you</span>
+      <kbd>Del</kbd><span>Delete selected box</span>
+      <kbd>Esc</kbd><span>Deselect / close class picker</span>
+    </div>
+    <div class="desc" style="margin-top:14px">Drag to draw · drag a box to move · drag a corner to resize. AI boxes are dashed and colored by P(good).</div>
+    <div class="row" style="margin-top:16px"><button class="btn primary" onclick="toggleHelp()">Got it</button></div>
+  </div>
+</div>
+
+<div id="setup">
+  <div class="modal setupbox">
+    <div class="setuphead"><div class="logo">🎯</div>
+      <div><h3>Start a labeling project</h3><div class="sub">Pick a dataset preset (paths and classes are filled in for you), or point the tool at your own folder and class names.</div></div></div>
+    <div class="fld"><span>⚡ Dataset presets <em>(fills in the paths &amp; classes and seeds from ground truth)</em></span>
+      <div class="dspresets" id="dsPresets"><span class="k" style="color:var(--mut2);font-size:12px">loading…</span></div></div>
+    <label class="fld"><span>📁 Images folder</span>
+      <div style="display:flex;gap:8px">
+        <input id="suImages" type="text" spellcheck="false" style="flex:1" placeholder="click Browse… or type a path"/>
+        <button type="button" class="btn ghost" onclick="openBrowser()">Browse…</button>
+      </div>
+      <small>Click <b>Browse…</b> to pick a folder on this machine, or type an absolute path.</small></label>
+    <label class="fld"><span>🏷️ Class names</span>
+      <input id="suClasses" type="text" spellcheck="false" placeholder="cell, rbc, wbc"/>
+      <small>Comma-separated. (The detector is class-agnostic; classes are for your manual labels.)</small></label>
+    <label class="fld"><span>💾 Labels folder <em>(optional)</em></span>
+      <input id="suLabels" type="text" spellcheck="false" placeholder="defaults to the images folder"/>
+      <small>Where YOLO .txt labels are read/written. Leave blank to use the images folder.</small></label>
+    <div id="suErr" class="suerr"></div>
+    <div class="row" style="margin-top:6px"><button class="btn primary" style="flex:1" onclick="startSetup()">Start labeling →</button></div>
+    <div class="suhint">Tip: you can also launch with <code>--images &lt;dir&gt; --classes a,b,c</code> to skip this screen.</div>
+  </div>
+</div>
+
+<div id="browser">
+  <div class="modal browsebox">
+    <h3>📁 Choose image folder</h3>
+    <div class="bpath" id="bpath"></div>
+    <div class="brows" id="brows"></div>
+    <div class="bfoot">
+      <span id="bcount" class="k"></span>
+      <div style="flex:1"></div>
+      <button class="btn ghost" onclick="closeBrowser()">Cancel</button>
+      <button class="btn primary" id="bselect" onclick="selectBrowseFolder()">Select this folder</button>
+    </div>
+  </div>
+</div>
+
+<div id="gate">
+  <div class="modal gatebox">
+    <div class="gatehead">
+      <div><h3>🔍 Review the filter (validator) training crops</h3>
+        <div class="sub">Your labels become <b style="color:var(--ok)">good</b> crops; background and displaced boxes become <b style="color:var(--danger)">noise</b>. Adjust the rule, then Confirm.</div></div>
+      <div id="gateCounts" class="gcounts"></div>
+    </div>
+    <div class="gatebody">
+      <div class="gctrls">
+        <div class="lbl">Negative rule</div>
+        <div class="gseg">
+          <button class="btn sm" id="grBase" onclick="setGateRule('baseline')">baseline</button>
+          <button class="btn sm" id="grRef" onclick="setGateRule('refined')">refined</button>
+        </div>
+        <div class="lbl">Mix (good / empty / deviated)</div>
+        <div class="grow">good<input id="grGood" type="range" min="0.1" max="0.8" step="0.05" oninput="onGateSlide()"><span class="rv" id="grGoodV"></span></div>
+        <div class="grow">empty<input id="grEmpty" type="range" min="0" max="0.7" step="0.05" oninput="onGateSlide()"><span class="rv" id="grEmptyV"></span></div>
+        <div class="grow">dev&nbsp;&nbsp;<input id="grDev" type="range" min="0" max="0.7" step="0.05" oninput="onGateSlide()"><span class="rv" id="grDevV"></span></div>
+        <div class="lbl">Good-crop jitter (±)</div>
+        <div class="grow"><input id="grJit" type="range" min="0" max="0.3" step="0.01" oninput="onGateSlide()"><span class="rv" id="grJitV"></span></div>
+        <div id="grIouRow"><div class="lbl">Deviated max IoU</div>
+          <div class="grow"><input id="grIou" type="range" min="0" max="0.5" step="0.05" oninput="onGateSlide()"><span class="rv" id="grIouV"></span></div></div>
+        <div id="grRejRow"><div class="lbl">Negative IoU reject</div>
+          <div class="grow"><input id="grRej" type="range" min="0.3" max="0.95" step="0.05" oninput="onGateSlide()"><span class="rv" id="grRejV"></span></div></div>
+        <div class="lbl">Deviated displacement (shift)</div>
+        <div class="grow"><input id="grShift" type="range" min="0.15" max="1.6" step="0.05"
+          oninput="onGateSlide();updateDevOverlay()" title="Higher values fabricate deviated boxes that land further from the ground-truth box"><span class="rv" id="grShiftV"></span></div>
+        <div class="lbl">Deviated cases (per image)</div>
+        <div class="grow"><input id="grNdev" type="range" min="1" max="20" step="1"
+          oninput="$('grNdevV').textContent=this.value;updateDevOverlay()" title="How many deviated cases to fabricate per image (applies to both the preview and the crops)"><span class="rv" id="grNdevV"></span></div>
+        <div style="font-size:10.5px;color:var(--mut2);margin-top:3px">→ the preview on the right updates live</div>
+      </div>
+      <div class="gright" id="gRight">
+        <div class="devov">
+          <div class="devhd">🎯 Deviated preview —
+            <span style="color:var(--ok)">■GT</span> <span style="color:var(--danger)">■deviated</span>
+            <span class="gz" title="Zoom the preview (or scroll on the image)">
+              <button class="zb" onclick="stepDevZoom(-0.25)">－</button>
+              <input id="devZoom" type="range" min="0.5" max="6" step="0.05" value="1" oninput="setDevZoom(this.value)">
+              <button class="zb" onclick="stepDevZoom(0.25)">＋</button>
+              <span class="zv" id="devZoomV">1.0×</span>
+              <button class="zb wide" onclick="fitDev()" title="Fit to width">fit</button>
+            </span>
+            <button class="btn ghost sm" style="padding:3px 7px" onclick="devNextImage()">Another image ↻</button></div>
+          <div class="devview" id="devView" title="Scroll to zoom · drag to pan · double-click to fit">
+            <canvas id="devCanvas" width="520" height="300"></canvas></div>
+          <div class="devnote" id="devNote"></div>
+        </div>
+        <div class="gsplit" id="gSplit" title="Drag up / down to give more room to the preview or to the samples"></div>
+        <div class="gcrops" id="gateGrid"></div>
+      </div>
+    </div>
+    <div class="gatefoot">
+      <span id="gateMsg" class="k" style="color:var(--mut);font-size:11.5px"></span>
+      <div style="flex:1"></div>
+      <button class="btn danger" onclick="cancelGate()">Cancel</button>
+      <button class="btn" id="gateRegen" onclick="regenGate()">🔄 Regenerate preview</button>
+      <button class="btn train" id="gateConfirm" onclick="confirmGate()">✅ Confirm &amp; train the filter</button>
+    </div>
+  </div>
+</div>
+
+<div id="classPicker" onmousedown="event.stopPropagation()"></div>
+
+<script src="/static/js/app.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,3 @@
+# The annotation app. Deliberately tiny: the server is Python's own http.server, so a
+# label-only install needs nothing but Pillow (image dimensions and crop thumbnails).
+pillow>=10.0

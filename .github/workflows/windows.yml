@@ -1,0 +1,72 @@
+# Windows verification, so the .exe path is checked on every change instead of on a spare PC.
+#
+# The repository is developed on Linux — that is where the GPU and the datasets are — but the
+# executable can only be produced and started on Windows. This job closes that gap: it runs the
+# same suite and the same build audit the maintainer runs, then freezes the app and starts it.
+#
+# A green run means: the app imports, the suite passes, the bundle contains everything the spec
+# promises, and PG-Label.exe launches and reports its paths on a real Windows machine.
+
+name: windows
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.12"]     # the oldest supported and the one the release freezes with
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install the app's only dependency
+        run: python -m pip install --upgrade pip -r requirements.txt
+
+      - name: Run the test suite
+        run: python -m unittest discover -s tests -t tests -v
+
+      - name: Audit the source tree
+        run: python packaging/verify_build.py
+
+      # Redirected stdout on Windows falls back to the ANSI code page; this is the case that
+      # used to raise UnicodeEncodeError and is invisible in a console window.
+      - name: Check output survives a redirected stream
+        run: python run_app.py --where > where.json 2>&1
+
+      - name: Show the resolved paths
+        run: type where.json
+
+  build-exe:
+    runs-on: windows-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build PG-Label.exe
+        run: python packaging/build.py
+
+      - name: Audit the built bundle
+        run: python packaging/verify_build.py --dist packaging/dist/PG-Label
+
+      - name: Start the frozen app and read back its paths
+        run: packaging/dist/PG-Label/PG-Label.exe --where
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PG-Label-windows
+          path: packaging/dist/PG-Label
+          retention-days: 14
