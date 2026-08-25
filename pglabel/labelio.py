@@ -58,6 +58,9 @@ def save_yolo(labels_dir: Path, stem: str, boxes: List[dict]) -> None:
 
     ``newline="\\n"`` is deliberate: Windows text mode would write CRLF, so the same annotation
     session would produce byte-different label files depending on which OS it ran on.
+
+    It goes through ``open()`` rather than ``Path.write_text()`` because that method only grew a
+    ``newline`` parameter in 3.10, and this project supports 3.9.
     """
     labels_dir = Path(labels_dir)
     labels_dir.mkdir(parents=True, exist_ok=True)
@@ -66,8 +69,9 @@ def save_yolo(labels_dir: Path, stem: str, boxes: List[dict]) -> None:
         c = clip_norm_box(b)
         if c is not None:
             lines.append(f"{c['cls']} {c['cx']:.6f} {c['cy']:.6f} {c['w']:.6f} {c['h']:.6f}")
-    (labels_dir / f"{stem}.txt").write_text("\n".join(lines) + ("\n" if lines else ""),
-                                            encoding="utf-8", newline="\n")
+    text = "\n".join(lines) + ("\n" if lines else "")
+    with open(labels_dir / f"{stem}.txt", "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
 
 
 def image_size(image_path: Path) -> tuple[int, int]:
