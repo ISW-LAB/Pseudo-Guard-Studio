@@ -27,8 +27,8 @@ corrections feed the next round.
 > scores, calibrated to the dataset's own object density rather than to a threshold guessed once.
 
 Across seven public benchmarks this reaches **0.860 mean matched IoU** against 0.49–0.69 for
-confidence and SSOD baselines, and cuts annotation time from an estimated **10,161 minutes of
-manual work to 186** — a **98.2% reduction** — while a human still reviews one image in ten.
+confidence and SSOD baselines, and cuts annotation time from an estimated **6,483 minutes of
+manual work to 934** — an **85.6% reduction** — while a human still reviews one image in ten.
 
 ---
 
@@ -268,19 +268,23 @@ evaluated on a held-out 20% test split:
 
 ### 2 · Partial human correction pays for itself
 
-Correcting a random 10% or 20% of each round's proposals, relative change versus the AI-only
-pipeline:
+Correcting a random 10% or 20% of each round's pseudo-labeled images, under the 10% label
+budget. Values are the seven-dataset mean, with the relative change versus the AI-only pipeline:
 
 <p align="center"><img src="docs/figures/results-correction-heatmap.png" alt="Relative gain from partial human correction, per dataset" width="88%"></p>
 
 | Correction effort | mIoU | mAP@50 | mAP@50:95 |
 |:--|--:|--:|--:|
-| 10% of images | +0.9% | +2.8% | +5.7% |
-| 20% of images | +2.5% | +7.8% | +10.6% |
-| *marginal gain, 10% → 20%* | *+1.6* | *+5.0* | *+4.9* |
+| AI only (nothing reviewed) | 0.881 | 0.687 | 0.474 |
+| 10% of images | **0.889** *(+0.9%)* | **0.704** *(+2.5%)* | **0.497** *(+4.9%)* |
+| 20% of images | **0.903** *(+2.5%)* | **0.730** *(+6.3%)* | **0.515** *(+8.7%)* |
 
-The gain concentrates where the AI-only pipeline is weakest — Construction-PPE gains **+14.3%**
-mAP@50:95 from correcting one image in ten, and HomeObjects-3K **+17.8%** mAP@50 at 20%.
+At the 20% ratio every one of the 21 dataset × metric changes is positive. The gain concentrates
+where the AI-only pipeline is weakest — Construction-PPE gains **+14.3%** mAP@50:95 from
+correcting one image in ten, and HomeObjects-3K **+17.8%** mAP@50 at 20%.
+
+*(The heatmap's `Avg.` row averages the per-dataset percentages; the table above is the relative
+change of the seven-dataset mean, so the two aggregations differ by a few tenths of a point.)*
 
 ### 3 · Annotation time
 
@@ -288,12 +292,18 @@ mAP@50:95 from correcting one image in ten, and HomeObjects-3K **+17.8%** mAP@50
 
 | Workflow | Total annotation time | vs. human-only |
 |:--|--:|--:|
-| Human-only (11,567 images, 64,984 objects) | 10,160.7 min | — |
-| Pseudo-Guard, AI only | 29.7 min | **−99.7%** |
-| Pseudo-Guard + 10% human correction | 186.3 min | **−98.2%** |
-| Pseudo-Guard + 20% human correction | 303.2 min | **−97.0%** |
+| Human-only (11,567 images, 64,984 objects) | 6,482.9 min | — |
+| Pseudo-Guard, AI only | 678.2 min | **−89.5%** |
+| Pseudo-Guard + 10% human correction | 933.5 min | **−85.6%** |
+| Pseudo-Guard + 20% human correction | 1,119.8 min | **−82.7%** |
 
-Even the costliest collaborative setting saves over 9,850 minutes — about **164 hours** of human
+Total workflow time under the 10% label budget: human labeling and correction plus machine
+processing. Almost all of the AI-only cost is the label budget itself — **648.5 min** of hand
+labeling for the initial 10%, against **29.7 min** of machine time for all three rounds — so
+review is what the remaining budget buys. Excluding machine time, active human time falls 90.0%
+(AI only), 86.1% (10%) and 83.2% (20%).
+
+Even the costliest collaborative setting saves 5,363 minutes — about **89 hours** of human
 annotation — across the benchmark suite.
 
 ### 4 · The correction burden shrinks as the models adapt
@@ -301,9 +311,14 @@ annotation — across the benchmark suite.
 <p align="center"><img src="docs/figures/results-burden-rounds.png" alt="Change in correction time from round 1 to round 3" width="85%"></p>
 
 Under scarce supervision, corrections make the next round cheaper: at a 1% budget the time spent
-correcting falls **−13.9%** (10% correction) and **−21.2%** (20%) from round 1 to round 3. At a
-10% budget the burden rises instead — with a strong initial detector there is less left for
-adaptation to recover, and more accepted boxes to review.
+correcting falls **−6.5%** (10% correction) and **−13.2%** (20%) from round 1 to round 3. At a
+10% budget the burden rises instead — **+14.4%** and **+17.5%** — because with a strong initial
+detector there is less left for adaptation to recover, and more accepted boxes to review.
+
+Cumulatively, a larger budget is still the cheaper one to correct: summed over the three rounds,
+correction time drops **−32.9%** (10% correction) and **−35.0%** (20%) going from a 1% to a 10%
+label budget, while the action count drops only −15.6% and −18.7% — the corrections that remain
+are the cheap ones, not the expensive missed-object additions.
 
 ---
 
