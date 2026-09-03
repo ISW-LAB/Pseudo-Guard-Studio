@@ -133,7 +133,7 @@ python run_app.py --where
 One annotation round is four steps. The split between step 1 and step 2 is the whole point:
 
 ```mermaid
-flowchart LR
+flowchart TB
     A["🖊️ few labeled<br/>images"] --> B["1 · PROPOSE<br/>detector @ 0.05<br/><i>recall first</i>"]
     B --> C["2 · VALIDATE<br/>crop validator<br/><i>P(good), independent</i>"]
     C --> D["3 · ACCEPT<br/>count-guided K<br/><i>from your seed density</i>"]
@@ -271,8 +271,6 @@ evaluated on a held-out 20% test split:
 Correcting a random 10% or 20% of each round's pseudo-labeled images, under the 10% label
 budget. Values are the seven-dataset mean, with the relative change versus the AI-only pipeline:
 
-<p align="center"><img src="docs/figures/results-correction-heatmap.png" alt="Relative gain from partial human correction, per dataset" width="88%"></p>
-
 | Correction effort | mIoU | mAP@50 | mAP@50:95 |
 |:--|--:|--:|--:|
 | AI only (nothing reviewed) | 0.881 | 0.687 | 0.474 |
@@ -282,9 +280,6 @@ budget. Values are the seven-dataset mean, with the relative change versus the A
 At the 20% ratio every one of the 21 dataset × metric changes is positive. The gain concentrates
 where the AI-only pipeline is weakest — Construction-PPE gains **+14.3%** mAP@50:95 from
 correcting one image in ten, and HomeObjects-3K **+17.8%** mAP@50 at 20%.
-
-*(The heatmap's `Avg.` row averages the per-dataset percentages; the table above is the relative
-change of the seven-dataset mean, so the two aggregations differ by a few tenths of a point.)*
 
 ### 3 · Annotation time
 
