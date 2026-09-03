@@ -138,7 +138,7 @@ flowchart TB
     B --> C["2 · VALIDATE<br/>crop validator<br/><i>P(good), independent</i>"]
     C --> D["3 · ACCEPT<br/>count-guided K<br/><i>from your seed density</i>"]
     D --> E["4 · CORRECT<br/>accept · adjust · relabel<br/>delete · add"]
-    E -->|corrections retrain both models| A
+    E -->|"corrections retrain<br/>both models"| A
     D --> F["📦 exported<br/>dataset"]
 ```
 
